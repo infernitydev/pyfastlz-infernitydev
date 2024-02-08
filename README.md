@@ -10,7 +10,7 @@ Installation
 To install fastlz, simply:
 
 ```bash
-$ pip install fastlz
+$ pip install pyfastlz
 ```
 
 [FastLZ]: https://github.com/ariya/FastLZ
