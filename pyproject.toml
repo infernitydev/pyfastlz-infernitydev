@@ -2,4 +2,6 @@
 requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
+# Reference: https://setuptools-scm.readthedocs.io/en/latest/config/
 [tool.setuptools_scm]
+tag_regex = "^(?:test-)?(?P<version>[vV]?\\d+(?:\\.\\d+){0,2}[^\\+]*)(?:\\+.*)?$"

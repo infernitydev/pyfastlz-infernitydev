@@ -1,0 +1,98 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# References:
+# https://stackoverflow.com/a/72775830
+# https://stackoverflow.com/a/61892639
+# https://docs.github.com/en/actions/learn-github-actions/expressions
+# https://github.com/marketplace/actions/pypi-publish
+# https://github.com/pypa/cibuildwheel?tab=readme-ov-file#example-setup
+# https://github.com/pypa/cibuildwheel/blob/main/examples/github-deploy.yml
+
+name: Publish package to Pypi
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'test-*'
+
+permissions:
+  contents: read
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade cibuildwheel==2.16.5
+
+    - name: Build wheels
+      run: python -m cibuildwheel --output-dir wheelhouse
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+        path: wheelhouse/*.whl
+
+  upload_pypi:
+    name: Publish wheels to Pypi
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    steps:
+    - name: Unpacks artifacts into dist/
+      uses: actions/download-artifact@v4
+      with:
+        pattern: cibw-*
+        path: dist
+        merge-multiple: true
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade twine
+
+    - name: Publish package to Pypi
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        twine upload --skip-existing dist/*
+
+    - name: Publish package to TestPypi
+      if: startsWith(github.ref, 'refs/tags/test')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        twine upload --skip-existing --repository-url=https://test.pypi.org/legacy/ dist/*
