@@ -1,5 +1,6 @@
-from distutils.core import setup, Extension
-
+#!/usr/bin/env python3
+import setuptools
+from setuptools import setup, Extension
 
 setup(
     name='fastlz',
@@ -9,6 +10,7 @@ setup(
     author='Jared Suttles',
     url='https://github.com/jaredsuttles/python-fastlz',
     license='BSD License',
+    setup_requires=['wheel'],
     classifiers = [
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',

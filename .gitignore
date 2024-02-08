@@ -1,5 +1,9 @@
 *.so
+.python-version
 MANIFEST
 env*
+__pycache__/
 build/
 dist/
+*.egg-info/
+.venv/
