@@ -117,4 +117,3 @@ def test_version_001(content: bytes):
     assert c_ref == c
     u = decompress(c)
     assert u_ref == u
-
