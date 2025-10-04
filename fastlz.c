@@ -121,8 +121,8 @@ PyInit_fastlz(void) {
 
     m = PyModule_Create(&module_def);
 
-    PyModule_AddObject(m, "__version__", Py_BuildValue("s", "0.0.2"));
-    PyModule_AddObject(m, "__author__", Py_BuildValue("s", "Jared Suttles"));
+    PyModule_AddObject(m, "__version__", Py_BuildValue("s", "0.0.3"));
+    PyModule_AddObject(m, "__author__", Py_BuildValue("s", "whirlingstars"));
 
     d = PyModule_GetDict(m);
     FastlzError = PyErr_NewException("fastlz.FastlzError", NULL, NULL);
