@@ -5,6 +5,7 @@ from os import path, getcwd, chdir
 from urllib.request import urlopen
 from zipfile import ZipFile
 from pathlib import Path
+from struct import pack, unpack
 
 import pytest
 from pytest import TempPathFactory
@@ -66,9 +67,9 @@ def test_compress_uncompress_compare(get_corpus_dir: Path, filename: str):
     corpus_dir = get_corpus_dir
     with open(path.join(corpus_dir, filename), "rb") as f:
         uncompressed = f.read()
-        compressed = compress(uncompressed)
-        uncompressed_2 = decompress(compressed)
-        # print(f"filename: {filename} | sizes: {len(uncompressed)} -> {len(compressed)}")
+        compressed, length = compress(uncompressed)
+        uncompressed_2 = decompress(compressed, length)
+        print(f"filename: {filename} | sizes: {len(uncompressed)} -> {len(compressed)}")
         assert uncompressed == uncompressed_2
 
 
@@ -91,12 +92,14 @@ def test_compress_uncompress_compare(get_corpus_dir: Path, filename: str):
 def test_compress_compress(content: bytes):
     cnt = 100
     d = content
+    lengths = []
     # compression of compressions
     for i in range(cnt):
-        d = compress(d)
+        d, orig_len = compress(d)
+        lengths.append(orig_len)
     # decompress compression of compressions
     for i in range(cnt):
-        d = decompress(d)
+        d = decompress(d, lengths.pop())
     assert d == content
 
 
@@ -113,7 +116,13 @@ def test_compress_compress(content: bytes):
 def test_version_001(content: bytes):
     """compare with previous version"""
     (u_ref, c_ref) = content[0], bytes.fromhex(content[1])
-    c = compress(u_ref)
-    assert c_ref == c
-    u = decompress(c)
+
+    # Test new compress against old format
+    compressed, orig_len = compress(u_ref)
+    c = pack('<I', orig_len) + compressed
+    assert c == c_ref
+
+    # Test new decompress with old format
+    original_size = unpack('<I', c_ref[:4])[0]
+    u = decompress(c_ref[4:], original_size)
     assert u_ref == u

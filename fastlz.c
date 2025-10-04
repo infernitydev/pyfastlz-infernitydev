@@ -11,19 +11,24 @@ typedef unsigned __int32 uint32_t;
 PyObject* FastlzError;
 
 
-static PyObject *
-compress(PyObject *self, PyObject *args, PyObject *kwargs)
-{
+static PyObject *compress(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *result;
     const char *input;
     char *output;
-    Py_ssize_t level = 0, input_len;
-    uint32_t output_len;
+    int level = 0;
+    Py_ssize_t input_len;
+    Py_ssize_t output_alloc_size;
+    int compressed_len;
 
     static char *arglist[] = {"string", "level", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#|i", arglist, &input,
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "y#|i", arglist, &input,
                                      &input_len, &level))
         return NULL;
+
+    if (input_len > INT_MAX) {
+        PyErr_SetString(PyExc_ValueError, "input string is too large to be compressed");
+        return NULL;
+    }
 
     if (level == 0) {
         if (input_len < 65536)
@@ -35,51 +40,41 @@ compress(PyObject *self, PyObject *args, PyObject *kwargs)
         return NULL;
     }
 
-    output_len = sizeof(uint32_t) + (uint32_t)((input_len * 1.05) + 2);
-    output = (char *) malloc(output_len);
+    output_alloc_size = (Py_ssize_t)(input_len * 1.05);
+    if (output_alloc_size < 66) {
+        output_alloc_size = 66;
+    }
+
+    output = (char *) malloc(output_alloc_size);
     if (output == NULL)
         return PyErr_NoMemory();
-    memcpy(output, &input_len, sizeof(uint32_t));
 
-    output_len = fastlz_compress_level(level, input, input_len,
-                                       output + sizeof(uint32_t));
-    if (output_len == 0 && input_len != 0) {
+    compressed_len = fastlz_compress_level(level, input, (int)input_len, output);
+    if (compressed_len == 0 && input_len != 0) {
         free(output);
         PyErr_SetString(FastlzError, "could not compress");
         return NULL;
     }
 
-#if PY_MAJOR_VERSION >= 3
-    result = Py_BuildValue("y#", output, output_len + sizeof(uint32_t));
-#else
-    result = Py_BuildValue("s#", output, output_len + sizeof(uint32_t));
-#endif
+    result = Py_BuildValue("(y#n)", output, compressed_len, input_len);
     free(output);
     return result;
 }
 
 
-static PyObject *
-decompress(PyObject *self, PyObject *args)
-{
+static PyObject *decompress(PyObject *self, PyObject *args) {
     PyObject *result;
     const char *input;
     Py_ssize_t input_len;
     char *output;
-    uint32_t output_len, decompressed_len;
+    Py_ssize_t output_len;
+    int decompressed_len;
 
-    if (!PyArg_ParseTuple(args, "s#", &input, &input_len))
+    if (!PyArg_ParseTuple(args, "y#n", &input, &input_len, &output_len))
         return NULL;
 
-    if (input_len < (Py_ssize_t)sizeof(uint32_t)) {
-        PyErr_SetString(FastlzError, "invalid input");
-        return NULL;
-    }
-
-    memcpy(&output_len, input, sizeof(uint32_t));
-
-    if (output_len / 256.0 > input_len) {
-        PyErr_SetString(FastlzError, "invalid input");
+    if (output_len > INT_MAX || input_len > INT_MAX) {
+        PyErr_SetString(PyExc_ValueError, "input is too large to be decompressed");
         return NULL;
     }
 
@@ -87,23 +82,15 @@ decompress(PyObject *self, PyObject *args)
     if (output == NULL)
         return PyErr_NoMemory();
 
-    input_len -= sizeof(uint32_t);
-    input += sizeof(uint32_t);
-
-    decompressed_len = (uint32_t)fastlz_decompress(input, input_len, output,
-                                                   output_len);
+    decompressed_len = fastlz_decompress(input, (int)input_len, output, (int)output_len);
 
     if (decompressed_len != output_len) {
-        free(output);
         PyErr_SetString(FastlzError, "could not decompress");
+        free(output);
         return NULL;
     }
 
-#if PY_MAJOR_VERSION >= 3
     result = Py_BuildValue("y#", output, output_len);
-#else
-    result = Py_BuildValue("s#", output, output_len);
-#endif
     free(output);
     return result;
 }
@@ -120,8 +107,6 @@ static PyMethodDef module_methods[] = {
 PyDoc_STRVAR(module_doc,
 "Python wrapper for FastLZ, a lightning-fast lossless compression library.");
 
-#if PY_MAJOR_VERSION >= 3
-
 static struct PyModuleDef module_def = {
     PyModuleDef_HEAD_INIT,
     "fastlz",
@@ -131,23 +116,10 @@ static struct PyModuleDef module_def = {
 };
 
 PyMODINIT_FUNC
-PyInit_fastlz(void)
-
-#else
-
-PyMODINIT_FUNC
-initfastlz(void)
-
-#endif
-
-{
+PyInit_fastlz(void) {
     PyObject *m, *d;
 
-#if PY_MAJOR_VERSION >= 3
     m = PyModule_Create(&module_def);
-#else
-    m = Py_InitModule3("fastlz", module_methods, module_doc);
-#endif
 
     PyModule_AddObject(m, "__version__", Py_BuildValue("s", "0.0.2"));
     PyModule_AddObject(m, "__author__", Py_BuildValue("s", "Jared Suttles"));
@@ -155,8 +127,5 @@ initfastlz(void)
     d = PyModule_GetDict(m);
     FastlzError = PyErr_NewException("fastlz.FastlzError", NULL, NULL);
     PyDict_SetItemString(d, "FastlzError", FastlzError);
-
-#if PY_MAJOR_VERSION >= 3
     return m;
-#endif
 }
